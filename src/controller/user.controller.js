@@ -1,4 +1,4 @@
-import User from "../models/user.model.js";
+import User from "../models/user.model.js"
 import hashPassword from "../services/hash.password.js";
 import sendMail from "../utils/send.main.js";
 import accountCreatedEmail from "../services/createAccount.email.js";

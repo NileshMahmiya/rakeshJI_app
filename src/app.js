@@ -61,6 +61,6 @@ app.use(
   kundaliRoutes
 );
 
-app.get("/", (req, res) => {
-  res.send("hello everyone");
+app.get("/health", (req, res) => {
+  res.send("hello website is running");
 });
