@@ -5,22 +5,53 @@ import SamagriList from "../models/samagri.list.model.js";
 const sanitizeHeaders = (headers) => {
   if (!Array.isArray(headers)) return [];
 
-  return headers.map((h) => ({
-    headerTitle: h.headerTitle ? String(h.headerTitle).trim() : "सामग्री",
-    samagriItems: (h.samagriItems || [])
-      .filter((itm) => itm && itm.item && mongoose.Types.ObjectId.isValid(itm.item))
-      .map((itm) => {
-        const rawQtType = itm.customQtType?.toString().trim();
-        return {
-          item: itm.item,
-          customQuantity: itm.customQuantity ? String(itm.customQuantity).trim() : "",
-          customQtType:
-            rawQtType && mongoose.Types.ObjectId.isValid(rawQtType)
-              ? rawQtType
-              : null,
-        };
-      }),
-  }));
+  return headers.map((h) => {
+    const cleanTitle = (h.headerTitle || "सामग्री").toString().trim();
+    const rawItems = Array.isArray(h.samagriItems) ? h.samagriItems : [];
+
+    const cleanItems = [];
+
+    for (const itm of rawItems) {
+      if (!itm) continue;
+
+      let rawItemId = "";
+      if (itm.item && typeof itm.item === "object" && itm.item._id) {
+        rawItemId = itm.item._id.toString();
+      } else if (itm.item) {
+        rawItemId = itm.item.toString().trim();
+      } else if (itm._id) {
+        rawItemId = itm._id.toString().trim();
+      }
+
+      if (!rawItemId || !mongoose.Types.ObjectId.isValid(rawItemId)) {
+        continue;
+      }
+
+      const itemDoc = {
+        item: new mongoose.Types.ObjectId(rawItemId),
+        customQuantity: itm.customQuantity !== undefined && itm.customQuantity !== null
+          ? String(itm.customQuantity).trim()
+          : "",
+      };
+
+      const rawQt = itm.customQtType
+        ? (typeof itm.customQtType === "object" && itm.customQtType._id
+            ? itm.customQtType._id.toString()
+            : itm.customQtType.toString().trim())
+        : "";
+
+      if (rawQt && mongoose.Types.ObjectId.isValid(rawQt)) {
+        itemDoc.customQtType = new mongoose.Types.ObjectId(rawQt);
+      }
+
+      cleanItems.add ? cleanItems.add(itemDoc) : cleanItems.push(itemDoc);
+    }
+
+    return {
+      headerTitle: cleanTitle,
+      samagriItems: cleanItems,
+    };
+  });
 };
 
 // ======================================================
@@ -40,8 +71,8 @@ export const addList = async (req, res) => {
     const sanitizedHeaders = sanitizeHeaders(headers);
 
     const createList = await SamagriList.create({
-      samagriListTitle: samagriListTitle.trim(),
-      samagriListDescription: samagriListDescription.trim(),
+      samagriListTitle: String(samagriListTitle).trim(),
+      samagriListDescription: String(samagriListDescription).trim(),
       headers: sanitizedHeaders,
     });
 
@@ -74,18 +105,8 @@ export const fetchAllLists = async (req, res) => {
 
     if (search.trim()) {
       filter.$or = [
-        {
-          samagriListTitle: {
-            $regex: search.trim(),
-            $options: "i",
-          },
-        },
-        {
-          samagriListDescription: {
-            $regex: search.trim(),
-            $options: "i",
-          },
-        },
+        { samagriListTitle: { $regex: search.trim(), $options: "i" } },
+        { samagriListDescription: { $regex: search.trim(), $options: "i" } },
       ];
     }
 
@@ -190,11 +211,11 @@ export const updateList = async (req, res) => {
     }
 
     if (samagriListTitle !== undefined) {
-      list.samagriListTitle = samagriListTitle.trim();
+      list.samagriListTitle = String(samagriListTitle).trim();
     }
 
     if (samagriListDescription !== undefined) {
-      list.samagriListDescription = samagriListDescription.trim();
+      list.samagriListDescription = String(samagriListDescription).trim();
     }
 
     if (headers !== undefined) {
@@ -212,8 +233,7 @@ export const updateList = async (req, res) => {
     console.error("updateList error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to update samagri list",
-      error: error.message,
+      message: error.message || "Failed to update samagri list",
     });
   }
 };

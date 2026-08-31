@@ -34,7 +34,7 @@ const samagriListSchema = new mongoose.Schema(
             customQtType: {
               type: mongoose.Schema.Types.ObjectId,
               ref: "QuantityType",
-              default: null,
+              required: false,
             },
           },
         ],
