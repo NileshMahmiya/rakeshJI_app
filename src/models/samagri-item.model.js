@@ -6,20 +6,10 @@ const samagriItemSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-    },
-
-    itemQtType: {
-      type: mongoose.Schema.ObjectId,
-      ref: "QuantityType",
-     
-    },
-
-    itemQuantity: {
-      type: String,
-      
+      trim: true,
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 const SamagriItems = mongoose.model("SamagriItem", samagriItemSchema);

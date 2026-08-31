@@ -1,5 +1,31 @@
+import mongoose from "mongoose";
 import SamagriList from "../models/samagri.list.model.js";
 
+// Helper to sanitize incoming headers
+const sanitizeHeaders = (headers) => {
+  if (!Array.isArray(headers)) return [];
+
+  return headers.map((h) => ({
+    headerTitle: h.headerTitle ? String(h.headerTitle).trim() : "सामग्री",
+    samagriItems: (h.samagriItems || [])
+      .filter((itm) => itm && itm.item && mongoose.Types.ObjectId.isValid(itm.item))
+      .map((itm) => {
+        const rawQtType = itm.customQtType?.toString().trim();
+        return {
+          item: itm.item,
+          customQuantity: itm.customQuantity ? String(itm.customQuantity).trim() : "",
+          customQtType:
+            rawQtType && mongoose.Types.ObjectId.isValid(rawQtType)
+              ? rawQtType
+              : null,
+        };
+      }),
+  }));
+};
+
+// ======================================================
+// ADD LIST
+// ======================================================
 export const addList = async (req, res) => {
   try {
     const { samagriListTitle, samagriListDescription, headers } = req.body;
@@ -11,17 +37,7 @@ export const addList = async (req, res) => {
       });
     }
 
-    const sanitizedHeaders = headers.map((h) => ({
-      headerTitle: h.headerTitle ? h.headerTitle.trim() : "सामग्री",
-      samagriItems: (h.samagriItems || []).map((itm) => ({
-        item: itm.item,
-        customQuantity: itm.customQuantity ? String(itm.customQuantity).trim() : "",
-        customQtType:
-          itm.customQtType && mongoose.Types.ObjectId.isValid(itm.customQtType)
-            ? itm.customQtType
-            : null,
-      })),
-    }));
+    const sanitizedHeaders = sanitizeHeaders(headers);
 
     const createList = await SamagriList.create({
       samagriListTitle: samagriListTitle.trim(),
@@ -43,24 +59,19 @@ export const addList = async (req, res) => {
   }
 };
 
-
-
+// ======================================================
+// FETCH ALL LISTS
+// ======================================================
 export const fetchAllLists = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      search = "",
-    } = req.query;
+    const { page = 1, limit = 10, search = "" } = req.query;
 
     const pageNumber = Math.max(parseInt(page), 1);
     const limitNumber = Math.max(parseInt(limit), 1);
     const skip = (pageNumber - 1) * limitNumber;
 
-   
     const filter = {};
 
-  
     if (search.trim()) {
       filter.$or = [
         {
@@ -78,30 +89,22 @@ export const fetchAllLists = async (req, res) => {
       ];
     }
 
-   
     const totalLists = await SamagriList.countDocuments(filter);
 
-   
     const lists = await SamagriList.find(filter)
-      .populate("headers.samagriItems.item")
+      .populate("headers.samagriItems.item", "itemName")
+      .populate("headers.samagriItems.customQtType", "typeName quantityShortForm")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNumber)
-      .populate({
-    path: "headers.samagriItems.customQtType",
-  })
-
-
+      .limit(limitNumber);
 
     const totalPages = Math.ceil(totalLists / limitNumber);
 
     return res.status(200).json({
       success: true,
       message: "Samagri lists fetched successfully",
-
       data: {
         lists,
-
         pagination: {
           totalLists,
           totalPages,
@@ -113,8 +116,7 @@ export const fetchAllLists = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Fetch all samagri lists error:", error);
-
+    console.error("fetchAllLists error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch samagri lists",
@@ -123,17 +125,23 @@ export const fetchAllLists = async (req, res) => {
   }
 };
 
+// ======================================================
+// FETCH SINGLE LIST
+// ======================================================
 export const fetchSingleList = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const list = await SamagriList.findById(id).populate("headers.samagriItems.item").populate({
-      path: "headers.samagriItems",
-      populate: {
-        path: "itemQtType",
-        model: "QuantityType",
-      },
-    });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Samagri List ID",
+      });
+    }
+
+    const list = await SamagriList.findById(id)
+      .populate("headers.samagriItems.item", "itemName")
+      .populate("headers.samagriItems.customQtType", "typeName quantityShortForm");
 
     if (!list) {
       return res.status(404).json({
@@ -148,8 +156,7 @@ export const fetchSingleList = async (req, res) => {
       data: list,
     });
   } catch (error) {
-    console.error(error);
-
+    console.error("fetchSingleList error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch samagri list",
@@ -157,16 +164,22 @@ export const fetchSingleList = async (req, res) => {
     });
   }
 };
+
+// ======================================================
+// UPDATE LIST
+// ======================================================
 export const updateList = async (req, res) => {
   try {
-    const id = req.params.id || req.query.id || req.body.id
+    const id = req.params.id || req.query.id || req.body.id;
 
-    const {
-      samagriListTitle,
-      samagriListDescription,
-      headers,
-    } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Samagri List ID",
+      });
+    }
 
+    const { samagriListTitle, samagriListDescription, headers } = req.body;
     const list = await SamagriList.findById(id);
 
     if (!list) {
@@ -185,7 +198,7 @@ export const updateList = async (req, res) => {
     }
 
     if (headers !== undefined) {
-      list.headers = headers;
+      list.headers = sanitizeHeaders(headers);
     }
 
     await list.save();
@@ -196,8 +209,7 @@ export const updateList = async (req, res) => {
       data: list,
     });
   } catch (error) {
-    console.error(error);
-
+    console.error("updateList error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update samagri list",
@@ -206,9 +218,19 @@ export const updateList = async (req, res) => {
   }
 };
 
+// ======================================================
+// DELETE LIST
+// ======================================================
 export const deleteList = async (req, res) => {
   try {
-    const id = req.params.id || req.query.id || req.body.id
+    const id = req.params.id || req.query.id || req.body.id;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Samagri List ID",
+      });
+    }
 
     const list = await SamagriList.findByIdAndDelete(id);
 
@@ -224,8 +246,7 @@ export const deleteList = async (req, res) => {
       message: "Samagri list deleted successfully",
     });
   } catch (error) {
-    console.error(error);
-
+    console.error("deleteList error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete samagri list",
