@@ -9,15 +9,7 @@ import QuantityType from "../models/quantity-type.model.js";
 
 export const createSamagriItem = async (req, res) => {
   try {
-    const {
-      itemName,
-      itemQtType,
-      itemQuantity,
-    } = req.body;
-
-    // ------------------------------------------
-    // Validate item name
-    // ------------------------------------------
+    const { itemName, itemQtType, itemQuantity } = req.body;
 
     if (!itemName || !itemName.trim()) {
       return res.status(400).json({
@@ -27,94 +19,50 @@ export const createSamagriItem = async (req, res) => {
 
     const trimmedItemName = itemName.trim();
 
-    // ------------------------------------------
-    // Check duplicate item
-    // ------------------------------------------
-
     const existingItem = await SamagriItems.findOne({
-      itemName: trimmedItemName,
+      itemName: { $regex: new RegExp(`^${trimmedItemName}$`, 'i') },
     });
 
     if (existingItem) {
-      return res.status(400).json({
-        message: "Samagri item already exists",
+      return res.status(200).json({
+        message: "Item already exists",
+        samagriItem: existingItem,
       });
     }
 
-    // ------------------------------------------
-    // Quantity type is OPTIONAL
-    // If provided, validate it
-    // ------------------------------------------
-
-    let quantityType = null;
-
-    if (itemQtType) {
-      if (!mongoose.Types.ObjectId.isValid(itemQtType)) {
-        return res.status(400).json({
-          message: "Invalid quantity type ID",
-        });
-      }
-
-      quantityType = await QuantityType.findById(itemQtType);
-
-      if (!quantityType) {
-        return res.status(404).json({
-          message: "Quantity type not found",
-        });
-      }
-    }
-
-    // ------------------------------------------
-    // Quantity is OPTIONAL
-    // ------------------------------------------
-
-    let quantity = undefined;
-
-    if (
-      itemQuantity !== undefined &&
-      itemQuantity !== null &&
-      itemQuantity !== ""
-    ) {
-      quantity = String(itemQuantity).trim();
-    }
-
-    // ------------------------------------------
-    // Create item
-    // ------------------------------------------
-
-    const samagriItem = await SamagriItems.create({
+    const newItemData = {
       itemName: trimmedItemName,
+    };
 
-      ...(itemQtType
-        ? { itemQtType: itemQtType }
-        : {}),
+    if (itemQtType && mongoose.Types.ObjectId.isValid(itemQtType)) {
+      newItemData.itemQtType = itemQtType;
+    }
 
-      ...(quantity
-        ? { itemQuantity: quantity }
-        : {}),
-    });
+    if (itemQuantity !== undefined && itemQuantity !== null && String(itemQuantity).trim() !== "") {
+      newItemData.itemQuantity = String(itemQuantity).trim();
+    }
+
+    const samagriItem = await SamagriItems.create(newItemData);
 
     return res.status(201).json({
       message: "Samagri Item Created Successfully",
       samagriItem,
     });
   } catch (err) {
-    console.log(err);
-
-    // Handle duplicate key error
+    console.error("createSamagriItem error:", err);
     if (err.code === 11000) {
-      return res.status(400).json({
-        message: "Samagri item already exists",
+      const existing = await SamagriItems.findOne({ itemName: req.body.itemName.trim() });
+      return res.status(200).json({
+        message: "Item already exists",
+        samagriItem: existing,
       });
     }
 
     return res.status(500).json({
-      message:
-        "Something went wrong while creating samagri item",
+      message: err.message || "Something went wrong while creating samagri item",
     });
   }
 };
-
 
 // ======================================================
 // FETCH ALL SAMAGRI ITEMS
