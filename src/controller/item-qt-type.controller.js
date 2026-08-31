@@ -67,7 +67,7 @@ export const createQuantityType = async (req, res) => {
 export const fetchAllQuantityTypes = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 50;
     const search = req.query.search?.trim() || "";
 
     if (page < 1) {
@@ -286,6 +286,191 @@ export const deleteQuantityType = async (req, res) => {
     return res.status(500).json({
       message:
         "Something went wrong while deleting quantity type",
+    });
+  }
+};
+
+
+
+export const createBulkQuantityTypes = async (req, res) => {
+  try {
+    const { quantityTypes } = req.body;
+
+    // Check array
+    if (!Array.isArray(quantityTypes)) {
+      return res.status(400).json({
+        message: "quantityTypes must be an array",
+      });
+    }
+
+    if (quantityTypes.length === 0) {
+      return res.status(400).json({
+        message: "quantityTypes array cannot be empty",
+      });
+    }
+
+    const validQuantityTypes = [];
+    const skippedItems = [];
+
+    // Remove duplicate entries from request itself
+    const seenTypeNames = new Set();
+    const seenShortForms = new Set();
+
+    for (const item of quantityTypes) {
+      const typeName = item?.typeName?.trim();
+      const quantityShortForm =
+        item?.quantityShortForm?.trim();
+
+      // Validate fields
+      if (!typeName || !quantityShortForm) {
+        skippedItems.push({
+          item,
+          reason:
+            "Type name and quantity short form are required",
+        });
+
+        continue;
+      }
+
+      // Duplicate inside same request
+      if (
+        seenTypeNames.has(typeName) ||
+        seenShortForms.has(quantityShortForm)
+      ) {
+        skippedItems.push({
+          typeName,
+          quantityShortForm,
+          reason: "Duplicate entry in request",
+        });
+
+        continue;
+      }
+
+      seenTypeNames.add(typeName);
+      seenShortForms.add(quantityShortForm);
+
+      validQuantityTypes.push({
+        typeName,
+        quantityShortForm,
+      });
+    }
+
+    if (validQuantityTypes.length === 0) {
+      return res.status(400).json({
+        message: "No valid quantity types to create",
+        createdQuantityTypes: [],
+        skippedItems,
+      });
+    }
+
+    // Check existing records in database
+    const typeNames = validQuantityTypes.map(
+      (item) => item.typeName
+    );
+
+    const shortForms = validQuantityTypes.map(
+      (item) => item.quantityShortForm
+    );
+
+    const existingQuantityTypes =
+      await QuantityType.find({
+        $or: [
+          {
+            typeName: {
+              $in: typeNames,
+            },
+          },
+          {
+            quantityShortForm: {
+              $in: shortForms,
+            },
+          },
+        ],
+      });
+
+    const existingTypeNames = new Set(
+      existingQuantityTypes.map(
+        (item) => item.typeName
+      )
+    );
+
+    const existingShortForms = new Set(
+      existingQuantityTypes.map(
+        (item) => item.quantityShortForm
+      )
+    );
+
+    // Only keep new records
+    const newQuantityTypes = [];
+
+    for (const item of validQuantityTypes) {
+      if (existingTypeNames.has(item.typeName)) {
+        skippedItems.push({
+          typeName: item.typeName,
+          quantityShortForm:
+            item.quantityShortForm,
+          reason: "Type name already exists",
+        });
+
+        continue;
+      }
+
+      if (
+        existingShortForms.has(
+          item.quantityShortForm
+        )
+      ) {
+        skippedItems.push({
+          typeName: item.typeName,
+          quantityShortForm:
+            item.quantityShortForm,
+          reason:
+            "Quantity short form already exists",
+        });
+
+        continue;
+      }
+
+      newQuantityTypes.push(item);
+    }
+
+    // Nothing new
+    if (newQuantityTypes.length === 0) {
+      return res.status(200).json({
+        message:
+          "No new quantity types were created",
+        createdCount: 0,
+        createdQuantityTypes: [],
+        skippedCount: skippedItems.length,
+        skippedItems,
+      });
+    }
+
+    // Insert all new records
+    const createdQuantityTypes =
+      await QuantityType.insertMany(
+        newQuantityTypes
+      );
+
+    return res.status(201).json({
+      message:
+        "Quantity Types Bulk Upload Completed Successfully",
+
+      createdCount:
+        createdQuantityTypes.length,
+
+      createdQuantityTypes,
+
+      skippedCount: skippedItems.length,
+
+      skippedItems,
+    });
+  } catch (err) {
+    console.log(err);
+
+    return res.status(500).json({
+      message:
+        "Something went wrong while bulk uploading quantity types",
     });
   }
 };

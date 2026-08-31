@@ -1,5 +1,5 @@
 import express from "express";
-import { createSamagriItem, fetchAllSamagriItems, fetchSingleSamagriItem, updateSamagriItem, deleteSamagriItem } from "../controller/samagri-item.controller.js";
+import { createSamagriItem, fetchAllSamagriItems, fetchSingleSamagriItem, updateSamagriItem, deleteSamagriItem , createMultipleSamagriItems } from "../controller/samagri-item.controller.js";
 
 const samagriItemsRouter = express.Router()
 
@@ -20,6 +20,8 @@ samagriItemsRouter.put("/update-item/:id", updateSamagriItem);
 
 
 samagriItemsRouter.delete("/delete-item/:id", deleteSamagriItem)
+
+samagriItemsRouter.post("/create-multiple", createMultipleSamagriItems)
 
 export default samagriItemsRouter;
 

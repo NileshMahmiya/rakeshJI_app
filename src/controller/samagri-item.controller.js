@@ -1,8 +1,11 @@
-
+import mongoose from "mongoose";
 import SamagriItems from "../models/samagri-item.model.js";
 import QuantityType from "../models/quantity-type.model.js";
 
-
+// ======================================================
+// CREATE SAMAGRI ITEM
+// Only itemName is required
+// ======================================================
 
 export const createSamagriItem = async (req, res) => {
   try {
@@ -12,17 +15,24 @@ export const createSamagriItem = async (req, res) => {
       itemQuantity,
     } = req.body;
 
-  
-    if (!itemName || !itemQtType || !itemQuantity) {
+    // ------------------------------------------
+    // Validate item name
+    // ------------------------------------------
+
+    if (!itemName || !itemName.trim()) {
       return res.status(400).json({
-        message:
-          "Item name, quantity type and quantity are required",
+        message: "Item name is required",
       });
     }
 
-   
+    const trimmedItemName = itemName.trim();
+
+    // ------------------------------------------
+    // Check duplicate item
+    // ------------------------------------------
+
     const existingItem = await SamagriItems.findOne({
-      itemName: itemName.trim(),
+      itemName: trimmedItemName,
     });
 
     if (existingItem) {
@@ -31,31 +41,72 @@ export const createSamagriItem = async (req, res) => {
       });
     }
 
-   
-    const quantityType = await QuantityType.findById(
-      itemQtType
-    );
+    // ------------------------------------------
+    // Quantity type is OPTIONAL
+    // If provided, validate it
+    // ------------------------------------------
 
-    if (!quantityType) {
-      return res.status(404).json({
-        message: "Quantity type not found",
-      });
+    let quantityType = null;
+
+    if (itemQtType) {
+      if (!mongoose.Types.ObjectId.isValid(itemQtType)) {
+        return res.status(400).json({
+          message: "Invalid quantity type ID",
+        });
+      }
+
+      quantityType = await QuantityType.findById(itemQtType);
+
+      if (!quantityType) {
+        return res.status(404).json({
+          message: "Quantity type not found",
+        });
+      }
     }
 
-  
+    // ------------------------------------------
+    // Quantity is OPTIONAL
+    // ------------------------------------------
+
+    let quantity = undefined;
+
+    if (
+      itemQuantity !== undefined &&
+      itemQuantity !== null &&
+      itemQuantity !== ""
+    ) {
+      quantity = String(itemQuantity).trim();
+    }
+
+    // ------------------------------------------
+    // Create item
+    // ------------------------------------------
+
     const samagriItem = await SamagriItems.create({
-      itemName: itemName.trim(),
-      itemQtType,
-      itemQuantity: itemQuantity.trim(),
+      itemName: trimmedItemName,
+
+      ...(itemQtType
+        ? { itemQtType: itemQtType }
+        : {}),
+
+      ...(quantity
+        ? { itemQuantity: quantity }
+        : {}),
     });
 
     return res.status(201).json({
       message: "Samagri Item Created Successfully",
       samagriItem,
     });
-
   } catch (err) {
     console.log(err);
+
+    // Handle duplicate key error
+    if (err.code === 11000) {
+      return res.status(400).json({
+        message: "Samagri item already exists",
+      });
+    }
 
     return res.status(500).json({
       message:
@@ -65,19 +116,24 @@ export const createSamagriItem = async (req, res) => {
 };
 
 
-
-
-
-
+// ======================================================
+// FETCH ALL SAMAGRI ITEMS
+// Supports:
+// ?page=1
+// ?limit=10
+// ?search=rice
+// ======================================================
 
 export const fetchAllSamagriItems = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 2000;
 
-  
     const search = req.query.search?.trim() || "";
 
+    // ------------------------------------------
+    // Validate pagination
+    // ------------------------------------------
 
     if (page < 1) {
       return res.status(400).json({
@@ -85,17 +141,17 @@ export const fetchAllSamagriItems = async (req, res) => {
       });
     }
 
-
     if (limit < 1) {
       return res.status(400).json({
         message: "Limit must be greater than 0",
       });
     }
 
-   
     const skip = (page - 1) * limit;
 
- 
+    // ------------------------------------------
+    // Search query
+    // ------------------------------------------
 
     const query = {};
 
@@ -106,7 +162,9 @@ export const fetchAllSamagriItems = async (req, res) => {
       };
     }
 
-  
+    // ------------------------------------------
+    // Count total
+    // ------------------------------------------
 
     const totalSamagriItems =
       await SamagriItems.countDocuments(query);
@@ -114,7 +172,10 @@ export const fetchAllSamagriItems = async (req, res) => {
     const totalPages =
       Math.ceil(totalSamagriItems / limit);
 
- 
+    // ------------------------------------------
+    // Fetch items
+    // ------------------------------------------
+
     const samagriItems =
       await SamagriItems.find(query)
         .populate(
@@ -125,10 +186,12 @@ export const fetchAllSamagriItems = async (req, res) => {
         .limit(limit)
         .sort({ createdAt: -1 });
 
- 
+    // ------------------------------------------
+    // No data
+    // ------------------------------------------
 
     if (samagriItems.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
         message: search
           ? "No Samagri Items Found For This Search"
           : "No Samagri Items Found",
@@ -137,30 +200,33 @@ export const fetchAllSamagriItems = async (req, res) => {
 
         pagination: {
           currentPage: page,
-          limit: limit,
-          totalSamagriItems: totalSamagriItems,
-          totalPages: totalPages,
+          limit,
+          totalSamagriItems,
+          totalPages,
         },
+
+        search,
       });
     }
 
+    // ------------------------------------------
+    // Success
+    // ------------------------------------------
 
     return res.status(200).json({
-      message:
-        "Samagri Items Fetched Successfully",
+      message: "Samagri Items Fetched Successfully",
 
       samagriItems,
 
       pagination: {
         currentPage: page,
-        limit: limit,
-        totalSamagriItems: totalSamagriItems,
-        totalPages: totalPages,
+        limit,
+        totalSamagriItems,
+        totalPages,
       },
 
       search,
     });
-
   } catch (err) {
     console.log(err);
 
@@ -172,11 +238,27 @@ export const fetchAllSamagriItems = async (req, res) => {
 };
 
 
-
+// ======================================================
+// FETCH SINGLE SAMAGRI ITEM
+// ======================================================
 
 export const fetchSingleSamagriItem = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // ------------------------------------------
+    // Validate ID
+    // ------------------------------------------
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid Samagri Item ID",
+      });
+    }
+
+    // ------------------------------------------
+    // Find item
+    // ------------------------------------------
 
     const samagriItem =
       await SamagriItems.findById(id).populate(
@@ -191,11 +273,9 @@ export const fetchSingleSamagriItem = async (req, res) => {
     }
 
     return res.status(200).json({
-      message:
-        "Samagri Item Fetched Successfully",
+      message: "Samagri Item Fetched Successfully",
       samagriItem,
     });
-
   } catch (err) {
     console.log(err);
 
@@ -207,7 +287,18 @@ export const fetchSingleSamagriItem = async (req, res) => {
 };
 
 
-
+// ======================================================
+// UPDATE SAMAGRI ITEM
+//
+// All fields are OPTIONAL.
+//
+// You can update:
+// itemName
+// itemQtType
+// itemQuantity
+//
+// You can also remove quantity/type by sending null.
+// ======================================================
 
 export const updateSamagriItem = async (req, res) => {
   try {
@@ -219,7 +310,20 @@ export const updateSamagriItem = async (req, res) => {
       itemQuantity,
     } = req.body;
 
+    // ------------------------------------------
+    // Validate ID
+    // ------------------------------------------
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid Samagri Item ID",
+      });
+    }
+
+    // ------------------------------------------
     // Find item
+    // ------------------------------------------
+
     const samagriItem =
       await SamagriItems.findById(id);
 
@@ -229,11 +333,22 @@ export const updateSamagriItem = async (req, res) => {
       });
     }
 
+    // ------------------------------------------
+    // Update item name
+    // ------------------------------------------
 
     if (itemName !== undefined) {
+      if (!itemName || !itemName.trim()) {
+        return res.status(400).json({
+          message: "Item name cannot be empty",
+        });
+      }
+
+      const trimmedItemName = itemName.trim();
+
       const existingItem =
         await SamagriItems.findOne({
-          itemName: itemName.trim(),
+          itemName: trimmedItemName,
           _id: { $ne: id },
         });
 
@@ -243,42 +358,83 @@ export const updateSamagriItem = async (req, res) => {
         });
       }
 
-      samagriItem.itemName =
-        itemName.trim();
+      samagriItem.itemName = trimmedItemName;
     }
+
+    // ------------------------------------------
+    // Update quantity type
+    //
+    // null = remove quantity type
+    // ------------------------------------------
 
     if (itemQtType !== undefined) {
-      const quantityType =
-        await QuantityType.findById(
-          itemQtType
-        );
+      if (itemQtType === null || itemQtType === "") {
+        samagriItem.itemQtType = undefined;
+      } else {
+        if (!mongoose.Types.ObjectId.isValid(itemQtType)) {
+          return res.status(400).json({
+            message: "Invalid quantity type ID",
+          });
+        }
 
-      if (!quantityType) {
-        return res.status(404).json({
-          message: "Quantity type not found",
-        });
+        const quantityType =
+          await QuantityType.findById(itemQtType);
+
+        if (!quantityType) {
+          return res.status(404).json({
+            message: "Quantity type not found",
+          });
+        }
+
+        samagriItem.itemQtType = itemQtType;
       }
-
-      samagriItem.itemQtType =
-        itemQtType;
     }
 
+    // ------------------------------------------
+    // Update quantity
+    //
+    // null / empty string = remove quantity
+    // ------------------------------------------
 
     if (itemQuantity !== undefined) {
-      samagriItem.itemQuantity =
-        itemQuantity.trim();
+      if (
+        itemQuantity === null ||
+        itemQuantity === ""
+      ) {
+        samagriItem.itemQuantity = undefined;
+      } else {
+        samagriItem.itemQuantity =
+          String(itemQuantity).trim();
+      }
     }
+
+    // ------------------------------------------
+    // Save
+    // ------------------------------------------
 
     await samagriItem.save();
 
+    // ------------------------------------------
+    // Return populated data
+    // ------------------------------------------
+
+    await samagriItem.populate(
+      "itemQtType",
+      "typeName quantityShortForm"
+    );
+
     return res.status(200).json({
-      message:
-        "Samagri Item Updated Successfully",
+      message: "Samagri Item Updated Successfully",
       samagriItem,
     });
-
   } catch (err) {
     console.log(err);
+
+    if (err.code === 11000) {
+      return res.status(400).json({
+        message: "Samagri item already exists",
+      });
+    }
 
     return res.status(500).json({
       message:
@@ -288,9 +444,27 @@ export const updateSamagriItem = async (req, res) => {
 };
 
 
+// ======================================================
+// DELETE SAMAGRI ITEM
+// ======================================================
+
 export const deleteSamagriItem = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // ------------------------------------------
+    // Validate ID
+    // ------------------------------------------
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid Samagri Item ID",
+      });
+    }
+
+    // ------------------------------------------
+    // Find item
+    // ------------------------------------------
 
     const samagriItem =
       await SamagriItems.findById(id);
@@ -301,13 +475,15 @@ export const deleteSamagriItem = async (req, res) => {
       });
     }
 
+    // ------------------------------------------
+    // Delete
+    // ------------------------------------------
+
     await SamagriItems.findByIdAndDelete(id);
 
     return res.status(200).json({
-      message:
-        "Samagri Item Deleted Successfully",
+      message: "Samagri Item Deleted Successfully",
     });
-
   } catch (err) {
     console.log(err);
 
@@ -318,3 +494,128 @@ export const deleteSamagriItem = async (req, res) => {
   }
 };
 
+
+
+export const createMultipleSamagriItems = async (req, res) => {
+  try {
+    const { itemNames } = req.body;
+
+    // ------------------------------------------
+    // Validate array
+    // ------------------------------------------
+
+    if (!Array.isArray(itemNames)) {
+      return res.status(400).json({
+        message: "itemNames must be an array",
+      });
+    }
+
+    if (itemNames.length === 0) {
+      return res.status(400).json({
+        message: "itemNames array cannot be empty",
+      });
+    }
+
+    // ------------------------------------------
+    // Clean item names
+    // Remove empty values
+    // Remove duplicates from request
+    // ------------------------------------------
+
+    const cleanedNames = [
+      ...new Set(
+        itemNames
+          .filter(
+            (item) =>
+              typeof item === "string" &&
+              item.trim() !== ""
+          )
+          .map((item) => item.trim())
+      ),
+    ];
+
+    if (cleanedNames.length === 0) {
+      return res.status(400).json({
+        message: "No valid item names found",
+      });
+    }
+
+    // ------------------------------------------
+    // Check which items already exist
+    // ------------------------------------------
+
+    const existingItems = await SamagriItems.find({
+      itemName: { $in: cleanedNames },
+    }).select("itemName");
+
+    const existingNames = new Set(
+      existingItems.map((item) => item.itemName)
+    );
+
+    // ------------------------------------------
+    // Only create new items
+    // ------------------------------------------
+
+    const newItemNames = cleanedNames.filter(
+      (name) => !existingNames.has(name)
+    );
+
+    // ------------------------------------------
+    // If all items already exist
+    // ------------------------------------------
+
+    if (newItemNames.length === 0) {
+      return res.status(400).json({
+        message: "All Samagri items already exist",
+
+        createdItems: [],
+
+        alreadyExistingItems: [
+          ...existingNames,
+        ],
+      });
+    }
+
+    // ------------------------------------------
+    // Create multiple items
+    // ------------------------------------------
+
+    const itemsToCreate = newItemNames.map(
+      (itemName) => ({
+        itemName,
+      })
+    );
+
+    const createdItems =
+      await SamagriItems.insertMany(
+        itemsToCreate
+      );
+
+    // ------------------------------------------
+    // Response
+    // ------------------------------------------
+
+    return res.status(201).json({
+      message:
+        "Samagri Items Created Successfully",
+
+      createdItems,
+
+      alreadyExistingItems: [
+        ...existingNames,
+      ],
+
+      totalCreated: createdItems.length,
+
+      totalAlreadyExisting:
+        existingNames.size,
+    });
+  } catch (err) {
+    console.log(err);
+
+    return res.status(500).json({
+      message:
+        "Something went wrong while creating samagri items",
+    });
+  }
+};

@@ -28,12 +28,13 @@ const samagriListSchema = new mongoose.Schema(
             },
             customQuantity: {
               type: String,
-              required: true,
+              trim: true,
+              default: "",
             },
             customQtType: {
               type: mongoose.Schema.Types.ObjectId,
               ref: "QuantityType",
-              required: true,
+              default: null,
             },
           },
         ],

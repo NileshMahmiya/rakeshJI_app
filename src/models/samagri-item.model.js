@@ -11,12 +11,12 @@ const samagriItemSchema = new mongoose.Schema(
     itemQtType: {
       type: mongoose.Schema.ObjectId,
       ref: "QuantityType",
-      required: true,
+     
     },
 
     itemQuantity: {
       type: String,
-      required: true,
+      
     },
   },
   { timestamps: true },

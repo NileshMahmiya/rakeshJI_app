@@ -2,31 +2,31 @@ import SamagriList from "../models/samagri.list.model.js";
 
 export const addList = async (req, res) => {
   try {
-    const {
-      samagriListTitle,
-      samagriListDescription,
-      headers,
-    } = req.body;
+    const { samagriListTitle, samagriListDescription, headers } = req.body;
 
-   
-    if (
-      !samagriListTitle ||
-      !samagriListDescription ||
-      !headers ||
-      !Array.isArray(headers)
-    ) {
+    if (!samagriListTitle || !samagriListDescription || !Array.isArray(headers)) {
       return res.status(400).json({
         status: false,
-        message:
-          "samagriListTitle, samagriListDescription and headers are required",
+        message: "samagriListTitle, samagriListDescription and headers are required",
       });
     }
 
-   
+    const sanitizedHeaders = headers.map((h) => ({
+      headerTitle: h.headerTitle ? h.headerTitle.trim() : "सामग्री",
+      samagriItems: (h.samagriItems || []).map((itm) => ({
+        item: itm.item,
+        customQuantity: itm.customQuantity ? String(itm.customQuantity).trim() : "",
+        customQtType:
+          itm.customQtType && mongoose.Types.ObjectId.isValid(itm.customQtType)
+            ? itm.customQtType
+            : null,
+      })),
+    }));
+
     const createList = await SamagriList.create({
       samagriListTitle: samagriListTitle.trim(),
       samagriListDescription: samagriListDescription.trim(),
-      headers,
+      headers: sanitizedHeaders,
     });
 
     return res.status(201).json({
@@ -35,11 +35,10 @@ export const addList = async (req, res) => {
       data: createList,
     });
   } catch (err) {
-    console.log(err);
-
+    console.error("addList error:", err);
     return res.status(500).json({
       status: false,
-      message: "Something went wrong in Samagri List API",
+      message: err.message || "Something went wrong in Samagri List API",
     });
   }
 };
