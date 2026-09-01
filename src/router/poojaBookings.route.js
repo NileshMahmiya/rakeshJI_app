@@ -5,7 +5,7 @@ import {
   getBookingMetrics,
   deleteBooking,
 } from "../controller/poojaBooking.controller.js";
-import authMiddleware from "../middlewares/auth.middleware.js"; // Adjust path to match your auth middleware
+import authMiddleware from "../middleware/auth.middleware.js"; // Adjust path to match your auth middleware
 
 const poojaBookingrouter = express.Router();
 
