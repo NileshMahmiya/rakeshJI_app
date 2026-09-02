@@ -97,27 +97,33 @@ export const fetchAllLists = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = "" } = req.query;
 
-    const pageNumber = Math.max(parseInt(page), 1);
-    const limitNumber = Math.max(parseInt(limit), 1);
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNumber = Math.max(parseInt(limit, 10) || 10, 1);
+
     const skip = (pageNumber - 1) * limitNumber;
 
     const filter = {};
 
-    if (search.trim()) {
-      filter.$or = [
-        { samagriListTitle: { $regex: search.trim(), $options: "i" } },
-        { samagriListDescription: { $regex: search.trim(), $options: "i" } },
-      ];
+    // Search only by list title
+    const trimmedSearch = search.trim();
+
+    if (trimmedSearch) {
+      filter.samagriListTitle = {
+        $regex: trimmedSearch,
+        $options: "i",
+      };
     }
 
+    // Total number of matching lists
     const totalLists = await SamagriList.countDocuments(filter);
 
+    // Fetch only required fields
     const lists = await SamagriList.find(filter)
-      .populate("headers.samagriItems.item", "itemName")
-      .populate("headers.samagriItems.customQtType", "typeName quantityShortForm")
+      .select("samagriListTitle createdAt")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNumber);
+      .limit(limitNumber)
+      .lean();
 
     const totalPages = Math.ceil(totalLists / limitNumber);
 
@@ -138,6 +144,7 @@ export const fetchAllLists = async (req, res) => {
     });
   } catch (error) {
     console.error("fetchAllLists error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Failed to fetch samagri lists",
