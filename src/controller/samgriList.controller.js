@@ -97,33 +97,27 @@ export const fetchAllLists = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = "" } = req.query;
 
-    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
-    const limitNumber = Math.max(parseInt(limit, 10) || 10, 1);
-
+    const pageNumber = Math.max(parseInt(page), 1);
+    const limitNumber = Math.max(parseInt(limit), 1);
     const skip = (pageNumber - 1) * limitNumber;
 
     const filter = {};
 
-    // Search only by list title
-    const trimmedSearch = search.trim();
-
-    if (trimmedSearch) {
-      filter.samagriListTitle = {
-        $regex: trimmedSearch,
-        $options: "i",
-      };
+    if (search.trim()) {
+      filter.$or = [
+        { samagriListTitle: { $regex: search.trim(), $options: "i" } },
+        { samagriListDescription: { $regex: search.trim(), $options: "i" } },
+      ];
     }
 
-    // Total number of matching lists
     const totalLists = await SamagriList.countDocuments(filter);
 
-    // Fetch only required fields
     const lists = await SamagriList.find(filter)
-      .select("samagriListTitle createdAt")
+      .populate("headers.samagriItems.item", "itemName")
+      .populate("headers.samagriItems.customQtType", "typeName quantityShortForm")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNumber)
-      .lean();
+      .limit(limitNumber);
 
     const totalPages = Math.ceil(totalLists / limitNumber);
 
@@ -144,7 +138,6 @@ export const fetchAllLists = async (req, res) => {
     });
   } catch (error) {
     console.error("fetchAllLists error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch samagri lists",
@@ -277,6 +270,68 @@ export const deleteList = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to delete samagri list",
+      error: error.message,
+    });
+  }
+};
+
+
+
+export const justListTitle = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
+
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNumber = Math.max(parseInt(limit, 10) || 10, 1);
+
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const filter = {};
+
+    // Search only by list title
+    const trimmedSearch = search.trim();
+
+    if (trimmedSearch) {
+      filter.samagriListTitle = {
+        $regex: trimmedSearch,
+        $options: "i",
+      };
+    }
+
+    // Total number of matching lists
+    const totalLists = await SamagriList.countDocuments(filter);
+
+    // Fetch only required fields
+    const lists = await SamagriList.find(filter)
+      .select("samagriListTitle createdAt")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNumber)
+      .lean();
+
+    const totalPages = Math.ceil(totalLists / limitNumber);
+
+    return res.status(200).json({
+      success: true,
+      message: "Samagri lists fetched successfully",
+      data: {
+        lists,
+        pagination: {
+          totalLists,
+          totalPages,
+          currentPage: pageNumber,
+          limit: limitNumber,
+          hasNextPage: pageNumber < totalPages,
+          hasPreviousPage: pageNumber > 1,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("fetchAllLists error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch samagri lists",
       error: error.message,
     });
   }
