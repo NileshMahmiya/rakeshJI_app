@@ -8,7 +8,14 @@ const samagriItemSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+
+    itemCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SamagriCategory",
+      default: null,
+    },
   },
+
   { timestamps: true }
 );
 

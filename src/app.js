@@ -40,6 +40,7 @@ import adminDashboardRouter from "./router/admin-dashboard.route.js";
 import samagriListRouter from "./router/samagriList.route.js";
 import bookCategoryRouter from "./router/bookCategory.route.js";
 import poojaBookingrouter from "./router/poojaBookings.route.js";
+import samagriCategoryRouter from "./router/samagriCategory.route.js";
 
 
 app.use("/api/v1/book", BookRouter);
@@ -56,6 +57,7 @@ app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/samagriList", samagriListRouter);
 app.use("/api/v1/book-category", bookCategoryRouter)
 app.use("/api/v1/pooja-booking", poojaBookingrouter)
+app.use("/api/v1/samagriCategory",samagriCategoryRouter )
 import kundaliRoutes from "./router/kundali.route.js";
 
 app.use(
